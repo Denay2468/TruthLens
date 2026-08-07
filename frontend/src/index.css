@@ -1,0 +1,82 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+:root {
+  --ink: #0d1117;
+  --ink-raised: #141b26;
+  --ink-line: #232d3d;
+  --phosphor: #35d488;
+  --phosphor-dim: #1f7a52;
+  --alert: #e5484d;
+  --amber: #f5a623;
+  --paper: #e8edf3;
+  --paper-dim: #8a97a8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-mono-display {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Scan beam sweep animation */
+@keyframes scan-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.animate-scan {
+  animation: scan-sweep 1.4s ease-in-out infinite;
+}
+
+/* Stamp entrance */
+@keyframes stamp-in {
+  0% { opacity: 0; transform: scale(1.4) rotate(var(--stamp-rot, -6deg)); }
+  60% { opacity: 1; transform: scale(0.92) rotate(var(--stamp-rot, -6deg)); }
+  100% { opacity: 1; transform: scale(1) rotate(var(--stamp-rot, -6deg)); }
+}
+.animate-stamp {
+  animation: stamp-in 0.35s cubic-bezier(.2,.8,.3,1.1) both;
+}
+
+/* Card entrance */
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-card-in {
+  animation: card-in 0.4s ease both;
+}
+
+::selection {
+  background: var(--phosphor-dim);
+  color: white;
+}
+
+/* Visible keyboard focus */
+:focus-visible {
+  outline: 2px solid var(--phosphor);
+  outline-offset: 2px;
+}

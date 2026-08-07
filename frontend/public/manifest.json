@@ -1,0 +1,9 @@
+{
+  "name": "TruthLens",
+  "short_name": "TruthLens",
+  "description": "Media & Information Literacy scanner — check claims, links, and clips.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117"
+}
