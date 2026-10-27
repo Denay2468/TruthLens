@@ -1,8 +1,10 @@
 # Python
 backend/venv/
+backend/.venv/
 backend/__pycache__/
 backend/**/__pycache__/
 *.pyc
+.pytest_cache/
 backend/.env
 
 # Node
@@ -10,5 +12,13 @@ frontend/node_modules/
 frontend/dist/
 frontend/.env
 
+# Secrets (any .env anywhere, but keep the examples)
+.env
+**/.env
+.env.*
+!.env.example
+!**/.env.example
+
 # OS
 .DS_Store
+Thumbs.db

@@ -66,6 +66,11 @@ export default function ScanResults({ isScanning, error, result }) {
           </p>
         </div>
       )}
+
+      <p className="pt-2 text-xs leading-relaxed" style={{ color: 'var(--paper-dim)' }}>
+        This is an AI-generated assessment. It can be wrong and is not proof or legal evidence.
+        Check the original sources before you rely on it.
+      </p>
     </div>
   )
 }
