@@ -73,7 +73,7 @@ src/
 - No component library — plain Tailwind utility classes + a handful of CSS
   custom properties in `index.css` for the color tokens, so there's nothing
   extra to install or configure.
-- Media upload is capped client-side isn't enforced — the 25MB limit is
-  enforced by the backend and will show up as an error message if exceeded.
+- The 25MB upload limit is not checked in the browser. The backend enforces it
+  and the UI shows its error message if a file is too big.
 - Reduced-motion is respected (scan/stamp animations disable automatically
   if the user has that OS setting on).

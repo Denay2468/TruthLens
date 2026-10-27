@@ -1,3 +1,5 @@
+import os
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -8,17 +10,27 @@ from routers import scanner
 
 app = FastAPI(
     title="TruthLens API",
-    description="Media & Information Literacy detection tools — URL, media, and text fact-checking.",
+    description="Media & Information Literacy detection tools: URL, media, and text fact-checking.",
     version="0.1.0",
 )
 
-# Allow the frontend (Vercel deployment + local dev) to call this API.
-# Tighten allow_origins to your actual frontend domain before going live.
+# Allowed browser origins. Set ALLOWED_ORIGINS (comma-separated) in .env for the
+# deployed frontend, e.g. ALLOWED_ORIGINS=https://truthlens.vercel.app
+# The default only allows local development.
+DEFAULT_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
+allowed_origins = [
+    o.strip()
+    for o in os.environ.get("ALLOWED_ORIGINS", DEFAULT_ORIGINS).split(",")
+    if o.strip()
+]
+
+# The API uses no cookies or sessions, so credentials stay off. (Browsers also
+# reject the combination of allow_origins=["*"] with credentials.)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=allowed_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
