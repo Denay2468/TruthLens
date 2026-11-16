@@ -35,8 +35,20 @@ export default function ScanResults({ isScanning, error, result }) {
     )
   }
 
+  const isUnavailable =
+    result.fact_check_status === 'not_configured' || result.fact_check_status === 'unavailable'
+
   return (
     <div className="space-y-3">
+      {isUnavailable && (
+        <div
+          className="rounded-lg border p-3 text-xs"
+          style={{ borderColor: 'var(--amber)', background: 'var(--ink-raised)', color: 'var(--amber)' }}
+        >
+          Fact-check lookup is unavailable right now.
+        </div>
+      )}
+
       {result.source_summary && (
         <p className="text-xs italic" style={{ color: 'var(--paper-dim)' }}>
           {result.source_summary}
@@ -53,7 +65,14 @@ export default function ScanResults({ isScanning, error, result }) {
           </p>
         </div>
       ) : (
-        result.claims.map((claim, i) => <ClaimCard key={i} claim={claim} index={i} />)
+        result.claims.map((claim, i) => (
+          <ClaimCard
+            key={i}
+            claim={claim}
+            index={i}
+            factCheckStatus={result.fact_check_status}
+          />
+        ))
       )}
 
       {result.overall_note && (
