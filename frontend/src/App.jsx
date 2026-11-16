@@ -3,6 +3,63 @@ import ScanInput from './components/ScanInput'
 import ScanResults from './components/ScanResults'
 import { scanUrl, scanText, scanMedia, ApiError } from './lib/api'
 
+const SAMPLE_MATCH = {
+  source_summary: 'Demonstration of fact-check evidence integration.',
+  overall_note: 'Cross-checked against published database and AI reasoning.',
+  fact_check_status: 'ok',
+  claims: [
+    {
+      text: 'Minum air rebusan bawang putih menyembuhkan infeksi virus secara instan.',
+      verdict: 'false',
+      reasoning: 'Klaim ini tidak memiliki dasar ilmiah medis dan telah dibantah oleh para ahli kesehatan.',
+      fact_checks: [
+        {
+          publisher: 'TurnBackHoax Indonesia',
+          rating: 'Salah / Hoaks',
+          title: '[SALAH] Bawang Putih Rebus Dapat Menyembuhkan Virus Corona',
+          url: 'https://turnbackhoax.id/2020/01/28/salah-bawang-putih-rebus-sembuhkan-virus-corona/',
+          review_date: '2020-01-28',
+        },
+        {
+          publisher: 'Kominfo RI',
+          rating: 'Disinformasi',
+          title: '[DISINFORMASI] Ramuan Rebusan Bawang Mengobati Virus',
+          url: 'https://kominfo.go.id/content/detail/24021/disinformasi-ramuan-bawang-putih-sembuhkan-virus/0/laporan_isu_hoaks',
+          review_date: '2020-01-29',
+        },
+      ],
+    },
+  ],
+}
+
+const SAMPLE_NO_MATCH = {
+  source_summary: 'Scanned claim with no published fact-check match found.',
+  overall_note: 'Verdict produced by AI estimation only.',
+  fact_check_status: 'ok',
+  claims: [
+    {
+      text: 'Studi lokal menunjukkan konsumsi buah naga membantu menurunkan gula darah.',
+      verdict: 'unverifiable',
+      reasoning: 'Terdapat penelitian awal pada hewan tetapi belum ada uji klinis berskala besar pada manusia.',
+      fact_checks: [],
+    },
+  ],
+}
+
+const SAMPLE_UNAVAILABLE = {
+  source_summary: 'System running with Google Fact Check API key unconfigured.',
+  overall_note: 'AI evaluation remains available as fallback.',
+  fact_check_status: 'unavailable',
+  claims: [
+    {
+      text: 'Air mendidih pada suhu 100 derajat Celsius di permukaan laut.',
+      verdict: 'true',
+      reasoning: 'Sesuai dengan hukum fisika termodinamika standar pada tekanan 1 atmosfer.',
+      fact_checks: [],
+    },
+  ],
+}
+
 export default function App() {
   const [isScanning, setIsScanning] = useState(false)
   const [error, setError] = useState(null)
@@ -55,9 +112,38 @@ export default function App() {
       </section>
 
       <section>
-        <p className="font-mono-display mb-3 text-xs font-bold tracking-widest" style={{ color: 'var(--paper-dim)' }}>
-          RESULTS
-        </p>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="font-mono-display text-xs font-bold tracking-widest" style={{ color: 'var(--paper-dim)' }}>
+            RESULTS
+          </p>
+          <div className="flex items-center gap-1.5 text-[10px]">
+            <span style={{ color: 'var(--paper-dim)' }}>Test UI:</span>
+            <button
+              type="button"
+              onClick={() => { setError(null); setResult(SAMPLE_MATCH); }}
+              className="rounded border px-2 py-0.5 transition-colors hover:border-[color:var(--phosphor)]"
+              style={{ borderColor: 'var(--ink-line)', color: 'var(--paper)', background: 'var(--ink-raised)' }}
+            >
+              Match
+            </button>
+            <button
+              type="button"
+              onClick={() => { setError(null); setResult(SAMPLE_NO_MATCH); }}
+              className="rounded border px-2 py-0.5 transition-colors hover:border-[color:var(--phosphor)]"
+              style={{ borderColor: 'var(--ink-line)', color: 'var(--paper)', background: 'var(--ink-raised)' }}
+            >
+              No Match
+            </button>
+            <button
+              type="button"
+              onClick={() => { setError(null); setResult(SAMPLE_UNAVAILABLE); }}
+              className="rounded border px-2 py-0.5 transition-colors hover:border-[color:var(--phosphor)]"
+              style={{ borderColor: 'var(--ink-line)', color: 'var(--paper)', background: 'var(--ink-raised)' }}
+            >
+              Unavailable
+            </button>
+          </div>
+        </div>
         <ScanResults isScanning={isScanning} error={error} result={result} />
       </section>
 
