@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 
 from models import ScanResult, UrlScanRequest, TextScanRequest
 from ratelimit import rate_limit
-from services import groq_service, scraper, whisper_service
+from services import factcheck_service, groq_service, scraper, whisper_service
 
 router = APIRouter(
     prefix="/api/scan",
@@ -33,6 +33,8 @@ async def scan_url(payload: UrlScanRequest):
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
+    result = await factcheck_service.enrich_scan_result(result)
+
     if not result.source_summary:
         result.source_summary = scraped["title"]
 
@@ -48,6 +50,8 @@ async def scan_text(payload: TextScanRequest):
         result = groq_service.fact_check_text(payload.text)
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+    result = await factcheck_service.enrich_scan_result(result)
 
     return result
 
@@ -93,6 +97,8 @@ async def scan_media(file: UploadFile = File(...)):
         result = groq_service.fact_check_text(transcript)
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+    result = await factcheck_service.enrich_scan_result(result)
 
     if not result.source_summary:
         result.source_summary = f"Transcript of {file.filename}"
