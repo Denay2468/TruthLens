@@ -3,57 +3,25 @@ Wrapper around the Google Fact Check Tools API — the second "eye" of TruthLens
 
 Setup:
   1. Enable the Fact Check Tools API and create an API key:
-       https://console.cloud.google.com/apis/api/factchecktolltools.googleapis.com
+       https://console.cloud.google.com/apis/api/factchecktools.googleapis.com
   2. Put the key in your .env file as GOOGLE_FACTCHECK_API_KEY=*** (see .env.example).
-  3. pip install httpx
-
-How it works ("dual-API"):
-  1. Groq (groq_service.fact_check_text) extracts the claims — max 6 — together
-     with a verdict (true / misleading / false / unverifiable) and reasoning.
-     Groq is always the source of the verdict.
-  2. After that, for each claim this module queries the Google Fact Check Tools
-     API to find any published fact-check that matches the claim text.
-  3. The API results are attached to each claim under `fact_checks`. They only
-     add evidence; they never change the verdict.
-
-Top-level ScanResult.fact_check_status is one of:
-  - "not_configured" — GOOGLE_FACTCHECK_API_KEY is not set. The app still works.
-  - "ok"           — every lookup that could be attempted completed (found
-                     matches, found nothing, or there were no claims to look up).
-  - "unavailable"  — a lookup timed out, was rate-limited or errored. The scan
-                     still succeeds with Groq's verdicts; the failed claim just
-                     gets an empty fact_checks list.
-
-The caller (backend/routers/scanner.py) does:
-    result = groq_service.fact_check_text(text)      # Groq verdicts
-    result = factcheck_service.enrich_scan_result(result)  # attach evidence
-    return result
 """
 
 import os
 import urllib.parse
+from typing import List
 
 import httpx
-from pydantic import BaseModel, Field, model_validator
-from typing import List, Optional
 
 from models import Claim, FactCheck, ScanResult
 
-# URL + path for the public Google Fact Check Tools "claims:search" endpoint.
 FACT_CHECK_API_URL = "https://factchecktools.googleapis.com/v1alpha1/claims:search"
-
-# Language used when no explicit override is present.
 DEFAULT_LANGUAGE_CODE = "en"
 DEFAULT_TIMEOUT_SECONDS = 10.0
 
 
 class FactCheckLookupError(Exception):
-    """Raised when the Fact Check Tools API cannot complete a lookup.
-
-    Covers missing key, timeout, HTTP error and network error. The caller must
-    not treat this as a scan failure: the scan still succeeds with the Groq
-    verdicts, and the failed claim simply gets an empty fact_checks list.
-    """
+    """Raised when the Fact Check Tools API cannot complete a lookup."""
 
 
 def _build_search_url(claim_text: str, language_code: str, api_key: str) -> str:
@@ -74,7 +42,9 @@ def _call_api(url: str, *, timeout: float) -> dict:
         return response.json()
 
 
-def lookup_fact_checks(claim_text: str, *, timeout: float = DEFAULT_TIMEOUT_SECONDS) -> List[FactCheck]:
+def lookup_fact_checks(
+    claim_text: str, *, timeout: float = DEFAULT_TIMEOUT_SECONDS
+) -> List[FactCheck]:
     """Look up published fact-checks that match one claim.
 
     Returns an empty list when the claim has no published fact-check (normal,
@@ -102,29 +72,35 @@ def lookup_fact_checks(claim_text: str, *, timeout: float = DEFAULT_TIMEOUT_SECO
     fact_checks: List[FactCheck] = []
 
     for item in api_claims:
-        claim = item.get("claim", item) if isinstance(item, dict) else None
-        if not isinstance(claim, dict):
+        if not isinstance(item, dict):
+            continue
+        reviews = item.get("claimReview", [])
+        if not isinstance(reviews, list):
             continue
 
-        publisher = claim.get("publisher")
-        if isinstance(publisher, dict):
-            publisher = publisher.get("name", "")
+        for review in reviews:
+            if not isinstance(review, dict):
+                continue
 
-        fact_checks.append(
-            FactCheck(
-                publisher=str(publisher or ""),
-                rating=str(claim.get("rating", "No rating")),
-                url=str(claim.get("url") or ""),
-                title=str(claim.get("title") or ""),
-                review_date=claim.get("review_date"),
+            publisher = review.get("publisher")
+            if isinstance(publisher, dict):
+                publisher = publisher.get("name", "")
+
+            fact_checks.append(
+                FactCheck(
+                    publisher=str(publisher or ""),
+                    rating=str(review.get("textualRating") or "No rating"),
+                    url=str(review.get("url") or ""),
+                    title=str(review.get("title") or ""),
+                    review_date=review.get("reviewDate"),
+                )
             )
-        )
 
     return fact_checks
 
 
 def _mark_not_configured(scan_result: ScanResult) -> ScanResult:
-    """Return a copy of scan_result whose fact_check_status is "not_configured"."""
+    """Return a copy of scan_result whose fact_check_status is 'not_configured'."""
     return scan_result.model_copy(
         update={
             "fact_check_status": "not_configured",
@@ -136,9 +112,7 @@ def _mark_not_configured(scan_result: ScanResult) -> ScanResult:
 def enrich_scan_result(scan_result: ScanResult) -> ScanResult:
     """Attach published fact-checks to every claim and set fact_check_status.
 
-    The lookup is best-effort: a timeout, rate limit or HTTP error never turns
-    into a scan failure. The scan still succeeds with Groq's verdicts; a claim
-    that could not be looked up simply has an empty fact_checks list.
+    Best-effort: timeouts, rate limits, or HTTP errors never fail the scan.
     """
     api_key = os.environ.get("GOOGLE_FACTCHECK_API_KEY")
     if not api_key:

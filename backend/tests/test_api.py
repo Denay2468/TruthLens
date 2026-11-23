@@ -31,6 +31,7 @@ def fake_result() -> ScanResult:
 def reset_state(monkeypatch):
     ratelimit.reset()
     monkeypatch.setenv("RATE_LIMIT_PER_MINUTE", "20")
+    monkeypatch.delenv("GOOGLE_FACTCHECK_API_KEY", raising=False)
     monkeypatch.setattr(groq_service, "fact_check_text", lambda text: fake_result())
 
 
