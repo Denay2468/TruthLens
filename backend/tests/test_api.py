@@ -31,6 +31,7 @@ def fake_result() -> ScanResult:
 def reset_state(monkeypatch):
     ratelimit.reset()
     monkeypatch.setenv("RATE_LIMIT_PER_MINUTE", "20")
+    monkeypatch.delenv("GOOGLE_FACTCHECK_API_KEY", raising=False)
     monkeypatch.setattr(groq_service, "fact_check_text", lambda text: fake_result())
 
 
@@ -199,3 +200,25 @@ def test_scraper_extracts_article_text(monkeypatch):
     assert result["title"] == "Test Page"
     assert "Hello claim world." in result["text"]
     assert "menu" not in result["text"]
+    
+# ---------- fact-check evidence reaches the API response ----------
+
+def test_scan_response_includes_fact_check_fields(monkeypatch):
+    r = client.post("/api/scan/text", json={"text": "Water boils at 100C."})
+    body = r.json()
+    assert body["fact_check_status"] == "not_configured"
+    assert body["claims"][0]["fact_checks"] == []
+
+
+def test_scan_response_carries_evidence_when_key_is_set(monkeypatch):
+    from models import FactCheck
+    from services import factcheck_service
+
+    async def fake_lookup(client, text, key):
+        return [FactCheck(publisher="AAP", rating="False", url="https://x.example/a", title="t")]
+
+    monkeypatch.setenv("GOOGLE_FACTCHECK_API_KEY", "test-key")
+    monkeypatch.setattr(factcheck_service, "lookup_fact_checks", fake_lookup)
+    body = client.post("/api/scan/text", json={"text": "Water boils at 100C."}).json()
+    assert body["fact_check_status"] == "ok"
+    assert body["claims"][0]["fact_checks"][0]["publisher"] == "AAP"
