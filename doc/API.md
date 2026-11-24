@@ -124,3 +124,4 @@ A failed web search or fact-check lookup is **not** an error: the scan still ret
 - API keys are read by the backend only; clients never send or receive them.
 - Long input is truncated to 6000 characters before analysis, and `overall_note` says so.
 - Page text from URL scans is cut to 8000 characters before that.
+- Fact-check lookups run concurrently with a 5 second timeout and return at most 3 results per claim.

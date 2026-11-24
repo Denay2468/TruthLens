@@ -138,4 +138,5 @@ All configuration is environment-based (see the README's Configuration table). T
 |---|---|
 | 0.1 | Initial draft from the project plan |
 | 0.2 | Rewritten from the actual code (Groq, Whisper, scraper); added security and limitations |
+| 0.3 | Documented Google Fact Check Tools API integration (concurrent lookups, 5s timeout, max 3 results per claim, optional language filter,error redaction, and fallback behavior) |
 | 1.0 | Evidence-based pipeline (fact-check lookup, web search, quote-checked judge); deployment decided (Vercel + Render); security notes extended |
