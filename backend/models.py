@@ -20,6 +20,26 @@ class FactCheck(BaseModel):
     review_date: Optional[str] = Field(None, description="Review date (ISO 8601), if given")
 
 
+class Passage(BaseModel):
+    """A piece of text retrieved from the web as possible evidence for a claim.
+    Internal: the judge reads these. Only quote-validated Evidence reaches the user."""
+    url: str
+    title: str = ""
+    text: str
+    retrieved_at: str = Field(..., description="UTC time the page was retrieved (ISO 8601)")
+
+
+class Evidence(BaseModel):
+    """A quote from a source. The quote was checked against the retrieved text:
+    if it is here, it really appears in that source."""
+    url: str
+    title: str = ""
+    quote: str = Field(..., description="Exact excerpt from the source")
+    stance: Literal["supports", "refutes", "neutral"]
+    source_type: Literal["web", "fact_check"] = "web"
+    retrieved_at: Optional[str] = Field(None, description="UTC time the source was retrieved (ISO 8601)")
+
+
 class Claim(BaseModel):
     """A single fact-checked claim extracted from source content."""
     text: str = Field(..., description="The claim as extracted/paraphrased from the source")
@@ -28,6 +48,10 @@ class Claim(BaseModel):
     fact_checks: List[FactCheck] = Field(
         default_factory=list,
         description="Published fact-checks related to this claim; empty when none were found",
+    )
+    evidence: List[Evidence] = Field(
+        default_factory=list,
+        description="Verified source quotes behind the verdict; empty when there is none",
     )
 
 
@@ -42,6 +66,13 @@ class ScanResult(BaseModel):
         description=(
             '"not_configured": no GOOGLE_FACTCHECK_API_KEY; "ok": every lookup finished '
             '(matches or none); "unavailable": at least one lookup failed'
+        ),
+    )
+    evidence_status: Literal["ok", "not_configured", "unavailable"] = Field(
+        "not_configured",
+        description=(
+            '"not_configured": no TAVILY_API_KEY; "ok": every web search finished; '
+            '"unavailable": at least one web search failed'
         ),
     )
     overall_note: Optional[str] = Field(

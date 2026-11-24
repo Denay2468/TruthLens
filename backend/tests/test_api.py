@@ -6,25 +6,37 @@ Run from the backend folder:   pytest
 """
 
 import asyncio
+import json
 
 import pytest
 from fastapi.testclient import TestClient
 
 import ratelimit
 from main import app
-from models import Claim, ScanResult
+from models import Passage
 from routers import scanner
-from services import groq_service, scraper, whisper_service
+from services import evidence_service, groq_service, judge_service, scraper, whisper_service
 
 client = TestClient(app)
 
 
-def fake_result() -> ScanResult:
-    return ScanResult(
-        source_summary="A test summary",
-        overall_note="A test note",
-        claims=[Claim(text="Water boils at 100C at sea level", verdict="true", reasoning="Standard physics.")],
-    )
+async def fake_llm(system, user, max_tokens):
+    """Stands in for Groq: one claim when extracting, a 'true' verdict with a quote when judging."""
+    if system == judge_service.EXTRACT_SYSTEM_PROMPT:
+        return json.dumps({"source_summary": "A test summary", "claims": ["Water boils at 100C at sea level"]})
+    return json.dumps({
+        "verdict": "true",
+        "reasoning": "r",
+        "evidence": [{"source": "S1", "quote": "Water boils at 100 degrees Celsius at sea level", "stance": "supports"}],
+    })
+
+
+BOILING = Passage(
+    url="https://physics.example/boiling",
+    title="Boiling point",
+    text="Water boils at 100 degrees Celsius at sea level.",
+    retrieved_at="2026-11-24T00:00:00+00:00",
+)
 
 
 @pytest.fixture(autouse=True)
@@ -32,7 +44,8 @@ def reset_state(monkeypatch):
     ratelimit.reset()
     monkeypatch.setenv("RATE_LIMIT_PER_MINUTE", "20")
     monkeypatch.delenv("GOOGLE_FACTCHECK_API_KEY", raising=False)
-    monkeypatch.setattr(groq_service, "fact_check_text", lambda text: fake_result())
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    monkeypatch.setattr(judge_service, "_groq_complete", fake_llm)
 
 
 # ---------- health ----------
@@ -45,11 +58,44 @@ def test_health():
 
 # ---------- text ----------
 
-def test_text_scan_ok():
+def test_text_scan_without_evidence_keys_is_unverifiable_not_guessed():
     r = client.post("/api/scan/text", json={"text": "Water boils at 100C."})
     assert r.status_code == 200
     body = r.json()
-    assert body["claims"][0]["verdict"] == "true"
+    claim = body["claims"][0]
+    assert claim["verdict"] == "unverifiable"      # no sources: the AI is not allowed to guess
+    assert claim["evidence"] == []
+    assert "not set up" in claim["reasoning"]
+    assert body["evidence_status"] == "not_configured"
+
+
+def test_text_scan_with_sources_gives_verdict_and_verified_quote(monkeypatch):
+    async def fake_search(client, text, key):
+        return [BOILING]
+
+    monkeypatch.setenv("TAVILY_API_KEY", "test-key")
+    monkeypatch.setattr(evidence_service, "search_evidence", fake_search)
+    body = client.post("/api/scan/text", json={"text": "Water boils at 100C."}).json()
+    claim = body["claims"][0]
+    assert claim["verdict"] == "true"
+    assert claim["evidence"][0]["url"] == BOILING.url
+    assert claim["evidence"][0]["stance"] == "supports"
+    assert body["evidence_status"] == "ok"
+    assert body["overall_note"].startswith("Checked 1 claim against sources: 1 true.")
+
+
+def test_failed_evidence_search_does_not_fail_the_scan(monkeypatch):
+    async def broken_search(client, text, key):
+        raise evidence_service.EvidenceSearchError("Evidence search timed out")
+
+    monkeypatch.setenv("TAVILY_API_KEY", "test-key")
+    monkeypatch.setattr(evidence_service, "search_evidence", broken_search)
+    r = client.post("/api/scan/text", json={"text": "Water boils at 100C."})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["evidence_status"] == "unavailable"
+    assert body["claims"][0]["verdict"] == "unverifiable"
+    assert "Try again" in body["claims"][0]["reasoning"]
 
 
 def test_text_scan_rejects_empty():
@@ -61,9 +107,9 @@ def test_text_scan_rejects_too_long():
 
 
 def test_text_scan_ai_failure_returns_502(monkeypatch):
-    def boom(text):
-        raise RuntimeError("Groq API request failed: boom")
-    monkeypatch.setattr(groq_service, "fact_check_text", boom)
+    async def boom(system, user, max_tokens):
+        raise judge_service.JudgeError("Groq API request failed: boom")
+    monkeypatch.setattr(judge_service, "_groq_complete", boom)
     r = client.post("/api/scan/text", json={"text": "hello"})
     assert r.status_code == 502
 

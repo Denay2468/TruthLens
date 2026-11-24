@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 
 from models import ScanResult, UrlScanRequest, TextScanRequest
 from ratelimit import rate_limit
-from services import factcheck_service, groq_service, scraper, whisper_service
+from services import pipeline, scraper, whisper_service
 
 router = APIRouter(
     prefix="/api/scan",
@@ -21,7 +21,7 @@ READ_CHUNK_BYTES = 1024 * 1024
 async def scan_url(payload: UrlScanRequest):
     """
     1) Scrape the page's main text content.
-    2) Send it to Groq for claim-level fact-checking.
+    2) Verify its claims against sources (see services/pipeline.py).
     """
     try:
         scraped = await scraper.scrape_url(str(payload.url))
@@ -29,11 +29,9 @@ async def scan_url(payload: UrlScanRequest):
         raise HTTPException(status_code=422, detail=str(e))
 
     try:
-        result = groq_service.fact_check_text(scraped["text"])
+        result = await pipeline.verify_content(scraped["text"])
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
-
-    result = await factcheck_service.enrich_scan_result(result)
 
     if not result.source_summary:
         result.source_summary = scraped["title"]
@@ -47,11 +45,9 @@ async def scan_text(payload: TextScanRequest):
     Fact-check raw pasted text (a claim, headline, or historical "fact").
     """
     try:
-        result = groq_service.fact_check_text(payload.text)
+        result = await pipeline.verify_content(payload.text)
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
-
-    result = await factcheck_service.enrich_scan_result(result)
 
     return result
 
@@ -60,7 +56,7 @@ async def scan_text(payload: TextScanRequest):
 async def scan_media(file: UploadFile = File(...)):
     """
     1) Transcribe an uploaded audio/video file with Whisper.
-    2) Send the transcript to Groq for fact-checking.
+    2) Verify the transcript's claims against sources.
     """
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
@@ -94,11 +90,9 @@ async def scan_media(file: UploadFile = File(...)):
         raise HTTPException(status_code=422, detail=str(e))
 
     try:
-        result = groq_service.fact_check_text(transcript)
+        result = await pipeline.verify_content(transcript)
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
-
-    result = await factcheck_service.enrich_scan_result(result)
 
     if not result.source_summary:
         result.source_summary = f"Transcript of {file.filename}"

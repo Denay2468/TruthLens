@@ -3,58 +3,66 @@ import ScanInput from './components/ScanInput'
 import ScanResults from './components/ScanResults'
 import { scanUrl, scanText, scanMedia, ApiError } from './lib/api'
 
+// Demo data for the dev-only "Test UI" buttons. Same shape the real API returns.
 const SAMPLE_MATCH = {
-  source_summary: 'Demonstration of fact-check evidence integration.',
-  overall_note: 'Cross-checked against published database and AI reasoning.',
+  source_summary: 'Demo: a claim refuted by published fact-checks.',
+  overall_note: 'Checked 1 claim against sources: 1 false.',
   fact_check_status: 'ok',
+  evidence_status: 'ok',
   claims: [
     {
       text: 'Minum air rebusan bawang putih menyembuhkan infeksi virus secara instan.',
       verdict: 'false',
-      reasoning: 'Klaim ini tidak memiliki dasar ilmiah medis dan telah dibantah oleh para ahli kesehatan.',
-      fact_checks: [
+      reasoning: 'Verified quotes from 2 sources contradict this claim, including 2 published fact-checks.',
+      evidence: [
         {
-          publisher: 'TurnBackHoax Indonesia',
-          rating: 'Salah / Hoaks',
-          title: '[SALAH] Bawang Putih Rebus Dapat Menyembuhkan Virus Corona',
           url: 'https://turnbackhoax.id/2020/01/28/salah-bawang-putih-rebus-sembuhkan-virus-corona/',
-          review_date: '2020-01-28',
+          title: 'TurnBackHoax Indonesia: [SALAH] Bawang Putih Rebus Dapat Menyembuhkan Virus Corona',
+          quote: '[SALAH] Bawang Putih Rebus Dapat Menyembuhkan Virus Corona',
+          stance: 'refutes',
+          source_type: 'fact_check',
         },
         {
-          publisher: 'Kominfo RI',
-          rating: 'Disinformasi',
-          title: '[DISINFORMASI] Ramuan Rebusan Bawang Mengobati Virus',
           url: 'https://kominfo.go.id/content/detail/24021/disinformasi-ramuan-bawang-putih-sembuhkan-virus/0/laporan_isu_hoaks',
-          review_date: '2020-01-29',
+          title: 'Kominfo RI: [DISINFORMASI] Ramuan Rebusan Bawang Mengobati Virus',
+          quote: '[DISINFORMASI] Ramuan Rebusan Bawang Mengobati Virus',
+          stance: 'refutes',
+          source_type: 'fact_check',
         },
       ],
+      fact_checks: [],
     },
   ],
 }
 
 const SAMPLE_NO_MATCH = {
-  source_summary: 'Scanned claim with no published fact-check match found.',
-  overall_note: 'Verdict produced by AI estimation only.',
+  source_summary: 'Demo: a claim with no sources found.',
+  overall_note: 'Checked 1 claim against sources: 1 unverifiable.',
   fact_check_status: 'ok',
+  evidence_status: 'ok',
   claims: [
     {
       text: 'Studi lokal menunjukkan konsumsi buah naga membantu menurunkan gula darah.',
       verdict: 'unverifiable',
-      reasoning: 'Terdapat penelitian awal pada hewan tetapi belum ada uji klinis berskala besar pada manusia.',
+      reasoning: 'No sources were found for this claim, so it cannot be verified.',
+      evidence: [],
       fact_checks: [],
     },
   ],
 }
 
 const SAMPLE_UNAVAILABLE = {
-  source_summary: 'System running with Google Fact Check API key unconfigured.',
-  overall_note: 'AI evaluation remains available as fallback.',
+  source_summary: 'Demo: the evidence search failed.',
+  overall_note:
+    'Checked 1 claim against sources: 1 unverifiable. Some evidence searches failed, so some claims may be under-checked.',
   fact_check_status: 'unavailable',
+  evidence_status: 'unavailable',
   claims: [
     {
       text: 'Air mendidih pada suhu 100 derajat Celsius di permukaan laut.',
-      verdict: 'true',
-      reasoning: 'Sesuai dengan hukum fisika termodinamika standar pada tekanan 1 atmosfer.',
+      verdict: 'unverifiable',
+      reasoning: 'The evidence search was unavailable just now, so this claim could not be checked. Try again.',
+      evidence: [],
       fact_checks: [],
     },
   ],
@@ -116,6 +124,7 @@ export default function App() {
           <p className="font-mono-display text-xs font-bold tracking-widest" style={{ color: 'var(--paper-dim)' }}>
             RESULTS
           </p>
+          {import.meta.env.DEV && (
           <div className="flex items-center gap-1.5 text-[10px]">
             <span style={{ color: 'var(--paper-dim)' }}>Test UI:</span>
             <button
@@ -143,6 +152,7 @@ export default function App() {
               Unavailable
             </button>
           </div>
+          )}
         </div>
         <ScanResults isScanning={isScanning} error={error} result={result} />
       </section>

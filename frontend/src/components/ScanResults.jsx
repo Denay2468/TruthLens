@@ -38,8 +38,24 @@ export default function ScanResults({ isScanning, error, result }) {
   const isUnavailable =
     result.fact_check_status === 'not_configured' || result.fact_check_status === 'unavailable'
 
+  let evidenceNotice = null
+  if (result.evidence_status === 'not_configured') {
+    evidenceNotice = 'Web evidence search is not set up on this server, so most claims cannot be verified.'
+  } else if (result.evidence_status === 'unavailable') {
+    evidenceNotice = 'Some evidence searches failed. Results may be incomplete; try again.'
+  }
+
   return (
     <div className="space-y-3">
+      {evidenceNotice && (
+        <div
+          className="rounded-lg border p-3 text-xs"
+          style={{ borderColor: 'var(--amber)', background: 'var(--ink-raised)', color: 'var(--amber)' }}
+        >
+          {evidenceNotice}
+        </div>
+      )}
+
       {isUnavailable && (
         <div
           className="rounded-lg border p-3 text-xs"
@@ -66,12 +82,7 @@ export default function ScanResults({ isScanning, error, result }) {
         </div>
       ) : (
         result.claims.map((claim, i) => (
-          <ClaimCard
-            key={i}
-            claim={claim}
-            index={i}
-            factCheckStatus={result.fact_check_status}
-          />
+          <ClaimCard key={i} claim={claim} index={i} />
         ))
       )}
 
@@ -87,8 +98,9 @@ export default function ScanResults({ isScanning, error, result }) {
       )}
 
       <p className="pt-2 text-xs leading-relaxed" style={{ color: 'var(--paper-dim)' }}>
-        This is an AI-generated assessment. It can be wrong and is not proof or legal evidence.
-        Check the original sources before you rely on it.
+        Verdicts are based on the source quotes shown, not on the AI's opinion. Sources can still
+        be wrong or out of date, and this is not proof or legal evidence. Open the links and judge
+        for yourself.
       </p>
     </div>
   )
