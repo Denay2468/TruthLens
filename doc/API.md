@@ -1,6 +1,6 @@
 # TruthLens: API Documentation
 
-**Status:** DRAFT v0.2 (Sprint 1) · matches `backend/routers/scanner.py`
+**Status:** v1.0 (Sprint 3) · matches `backend/routers/scanner.py` and `backend/services/pipeline.py`
 Base URL (local): `http://127.0.0.1:8000` · Interactive docs: `/docs` · Postman: `doc/postman/`
 
 All scan endpoints live under `/api/scan` and return the same result shape. They are rate limited per client IP (default 20 per minute).
@@ -10,9 +10,9 @@ All scan endpoints live under `/api/scan` and return the same result shape. They
 | Method | Route | Purpose |
 |---|---|---|
 | GET | `/` | Health check |
-| POST | `/api/scan/text` | Fact-check pasted text |
-| POST | `/api/scan/url` | Scrape a web page and fact-check its text |
-| POST | `/api/scan/media` | Transcribe an audio/video file and fact-check the transcript |
+| POST | `/api/scan/text` | Verify the claims in pasted text |
+| POST | `/api/scan/url` | Fetch a web page and verify its claims |
+| POST | `/api/scan/media` | Transcribe an audio/video file and verify the transcript |
 
 ### GET `/`
 
@@ -25,7 +25,7 @@ All scan endpoints live under `/api/scan` and return the same result shape. They
 Request (JSON): `text` is required, 1–8000 characters.
 
 ```json
-{ "text": "The Great Wall of China is visible from space." }
+{ "text": "Drinking hot water with lemon cures COVID-19." }
 ```
 
 ### POST `/api/scan/url`
@@ -33,12 +33,12 @@ Request (JSON): `text` is required, 1–8000 characters.
 Request (JSON): `url` must be a valid public `http` or `https` URL.
 
 ```json
-{ "url": "https://example.com/article" }
+{ "url": "https://en.wikipedia.org/wiki/Mount_Merapi" }
 ```
 
 ### POST `/api/scan/media`
 
-Request: `multipart/form-data` with one `file` field. Allowed extensions: `.mp4`, `.mp3`, `.wav`, `.m4a`. Maximum size: 25MB.
+Request: `multipart/form-data` with one `file` field. Allowed extensions: `.mp4`, `.mp3`, `.wav`, `.m4a`. Maximum size: 25MB. Only speech is analyzed.
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/scan/media -F "file=@clip.mp3"
@@ -48,19 +48,61 @@ curl -X POST http://127.0.0.1:8000/api/scan/media -F "file=@clip.mp3"
 
 ```json
 {
-  "source_summary": "A claim about the Great Wall of China",
-  "overall_note": "This is a common myth.",
+  "source_summary": "A claim that hot water with lemon cures COVID-19",
+  "overall_note": "Checked 1 claim against sources: 1 false.",
+  "fact_check_status": "ok",
+  "evidence_status": "ok",
   "claims": [
     {
-      "text": "The Great Wall of China is visible from space with the naked eye.",
+      "text": "Drinking hot water with lemon cures COVID-19",
       "verdict": "false",
-      "reasoning": "Astronauts report that it is not visible to the naked eye from orbit."
+      "reasoning": "Verified quotes from 3 sources contradict this claim, including 1 published fact-check.",
+      "evidence": [
+        {
+          "url": "https://apnews.com/article/example",
+          "title": "Example title",
+          "quote": "The drink is not a cure for the coronavirus.",
+          "stance": "refutes",
+          "source_type": "web",
+          "retrieved_at": "2026-11-24T10:00:00+00:00"
+        }
+      ],
+      "fact_checks": []
     }
   ]
 }
 ```
 
-`verdict` is one of `true`, `misleading`, `false`, `unverifiable`. The list holds at most 6 claims and can be empty when there is nothing checkable. The example values are illustrative.
+The example values are illustrative.
+
+### Fields
+
+| Field | Meaning |
+|---|---|
+| `source_summary` | One sentence on what was analyzed |
+| `overall_note` | Written by code: claim counts by verdict, plus notes about failed searches or truncation |
+| `fact_check_status` | `ok`, `not_configured` (no Google key) or `unavailable` (lookup failed) |
+| `evidence_status` | `ok`, `not_configured` (no Tavily key) or `unavailable` (at least one search failed) |
+| `claims` | At most 5 claims; can be empty when nothing is checkable |
+| `claims[].verdict` | `true`, `misleading`, `false` or `unverifiable` |
+| `claims[].reasoning` | Written by code from the verified quotes. The model's own explanation is never returned |
+| `claims[].evidence[]` | Verified quotes (max 4 per claim). Each quote appears word for word in the source at `url` |
+| `evidence[].stance` | `supports`, `refutes` or `neutral` |
+| `evidence[].source_type` | `web` (search result) or `fact_check` (published fact-check) |
+| `claims[].fact_checks[]` | Published fact-checks found for the claim (publisher, rating, title, url) |
+
+### How verdicts are decided
+
+The model proposes a verdict, but it can never go further than its verified quotes allow:
+
+| Verdict | Requires |
+|---|---|
+| `true` | at least one supporting quote and no refuting quote |
+| `false` | at least one refuting quote and no supporting quote |
+| `misleading` | at least one supporting or refuting quote |
+| anything else | `unverifiable` |
+
+A claim with no sources at all is `unverifiable` without calling the model. Quotes shorter than 12 characters are rejected.
 
 ## Errors
 
@@ -71,12 +113,14 @@ Errors return `{ "detail": "message" }`.
 | 400 | Uploaded file is empty |
 | 413 | File is larger than 25MB |
 | 415 | File type is not allowed |
-| 422 | Invalid input; page could not be fetched or is not HTML; address not allowed; no speech found |
+| 422 | Invalid input; page could not be fetched (for example HTTP 403) or is not HTML; address not allowed; no speech found |
 | 429 | Too many requests from this IP |
 | 502 | Groq request failed, `GROQ_API_KEY` is missing, or the model returned unusable output |
 
+A failed web search or fact-check lookup is **not** an error: the scan still returns 200, the affected claims become `unverifiable`, and `evidence_status` / `fact_check_status` say what happened.
+
 ## Notes
 
-- The Groq key is read by the backend only; clients never send or receive it.
-- Long input is truncated before analysis, and the result notes it.
-- **Planned (Sprint 2):** each claim may also include published fact-checks from the Google Fact Check Tools API. The fields are not final.
+- API keys are read by the backend only; clients never send or receive them.
+- Long input is truncated to 6000 characters before analysis, and `overall_note` says so.
+- Page text from URL scans is cut to 8000 characters before that.
