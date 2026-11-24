@@ -124,7 +124,7 @@ export default function App() {
           <p className="font-mono-display text-xs font-bold tracking-widest" style={{ color: 'var(--paper-dim)' }}>
             RESULTS
           </p>
-          {import.meta.env.DEV && (
+          {(import.meta.env.DEV || import.meta.env.VITE_SHOW_TEST_UI === 'true') && (
           <div className="flex items-center gap-1.5 text-[10px]">
             <span style={{ color: 'var(--paper-dim)' }}>Test UI:</span>
             <button
