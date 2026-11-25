@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import ScanInput from './components/ScanInput'
 import ScanResults from './components/ScanResults'
 import { scanUrl, scanText, scanMedia, ApiError } from './lib/api'
@@ -68,10 +68,25 @@ const SAMPLE_UNAVAILABLE = {
   ],
 }
 
+// The demo buttons are for development only. Set VITE_SHOW_TEST_UI=true to force them on.
+const SHOW_TEST_UI = import.meta.env.DEV || import.meta.env.VITE_SHOW_TEST_UI === 'true'
+
+const TEST_BUTTON_CLASS =
+  'rounded border px-2 py-0.5 transition-colors hover:border-[color:var(--phosphor)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--phosphor)]'
+const TEST_BUTTON_STYLE = { borderColor: 'var(--ink-line)', color: 'var(--paper)', background: 'var(--ink-raised)' }
+
 export default function App() {
   const [isScanning, setIsScanning] = useState(false)
   const [error, setError] = useState(null)
   const [result, setResult] = useState(null)
+  const resultsRef = useRef(null)
+
+  // On a phone the results appear below the fold: bring them into view when a scan finishes.
+  useEffect(() => {
+    if (!result && !error) return
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    resultsRef.current?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' })
+  }, [result, error])
 
   async function handleScan({ type, payload }) {
     setIsScanning(true)
@@ -95,11 +110,17 @@ export default function App() {
     }
   }
 
+  function showSample(sample) {
+    setError(null)
+    setResult(sample)
+  }
+
   return (
     <div className="mx-auto min-h-screen max-w-xl px-5 py-10">
       <header className="mb-10">
         <div className="mb-2 flex items-center gap-2">
           <span
+            aria-hidden="true"
             className="h-2 w-2 rounded-full"
             style={{ background: 'var(--phosphor)', boxShadow: '0 0 8px var(--phosphor)' }}
           />
@@ -115,47 +136,44 @@ export default function App() {
         </p>
       </header>
 
-      <section className="mb-8">
-        <ScanInput onScan={handleScan} isScanning={isScanning} />
-      </section>
+      <main>
+        <section className="mb-8" aria-labelledby="scan-heading">
+          <h2 id="scan-heading" className="sr-only">
+            Submit content to scan
+          </h2>
+          <ScanInput onScan={handleScan} isScanning={isScanning} />
+        </section>
 
-      <section>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="font-mono-display text-xs font-bold tracking-widest" style={{ color: 'var(--paper-dim)' }}>
-            RESULTS
-          </p>
-          {(import.meta.env.DEV || import.meta.env.VITE_SHOW_TEST_UI === 'true') && (
-          <div className="flex items-center gap-1.5 text-[10px]">
-            <span style={{ color: 'var(--paper-dim)' }}>Test UI:</span>
-            <button
-              type="button"
-              onClick={() => { setError(null); setResult(SAMPLE_MATCH); }}
-              className="rounded border px-2 py-0.5 transition-colors hover:border-[color:var(--phosphor)]"
-              style={{ borderColor: 'var(--ink-line)', color: 'var(--paper)', background: 'var(--ink-raised)' }}
+        <section ref={resultsRef} className="scroll-mt-6" aria-labelledby="results-heading">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2
+              id="results-heading"
+              className="font-mono-display text-xs font-bold tracking-widest"
+              style={{ color: 'var(--paper-dim)' }}
             >
-              Match
-            </button>
-            <button
-              type="button"
-              onClick={() => { setError(null); setResult(SAMPLE_NO_MATCH); }}
-              className="rounded border px-2 py-0.5 transition-colors hover:border-[color:var(--phosphor)]"
-              style={{ borderColor: 'var(--ink-line)', color: 'var(--paper)', background: 'var(--ink-raised)' }}
-            >
-              No Match
-            </button>
-            <button
-              type="button"
-              onClick={() => { setError(null); setResult(SAMPLE_UNAVAILABLE); }}
-              className="rounded border px-2 py-0.5 transition-colors hover:border-[color:var(--phosphor)]"
-              style={{ borderColor: 'var(--ink-line)', color: 'var(--paper)', background: 'var(--ink-raised)' }}
-            >
-              Unavailable
-            </button>
+              RESULTS
+            </h2>
+            {SHOW_TEST_UI && (
+              <div className="flex items-center gap-1.5 text-[10px]">
+                <span style={{ color: 'var(--paper-dim)' }}>Test UI:</span>
+                <button type="button" onClick={() => showSample(SAMPLE_MATCH)} className={TEST_BUTTON_CLASS} style={TEST_BUTTON_STYLE}>
+                  Match
+                </button>
+                <button type="button" onClick={() => showSample(SAMPLE_NO_MATCH)} className={TEST_BUTTON_CLASS} style={TEST_BUTTON_STYLE}>
+                  No Match
+                </button>
+                <button type="button" onClick={() => showSample(SAMPLE_UNAVAILABLE)} className={TEST_BUTTON_CLASS} style={TEST_BUTTON_STYLE}>
+                  Unavailable
+                </button>
+              </div>
+            )}
           </div>
-          )}
-        </div>
-        <ScanResults isScanning={isScanning} error={error} result={result} />
-      </section>
+          {/* Screen readers announce the result when it appears */}
+          <div aria-live="polite" aria-busy={isScanning}>
+            <ScanResults isScanning={isScanning} error={error} result={result} />
+          </div>
+        </section>
+      </main>
 
       <footer className="mt-16 text-center">
         <p className="text-xs" style={{ color: 'var(--paper-dim)' }}>
